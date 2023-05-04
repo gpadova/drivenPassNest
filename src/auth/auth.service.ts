@@ -1,52 +1,66 @@
 import {
-  ForbiddenException,
+  BadRequestException,
+  ConflictException,
   Injectable,
+  NotAcceptableException,
   NotFoundException,
 } from '@nestjs/common';
 import CreateAuthDto from './dto/create-auth.dto';
-import { AuthRepository } from './auth.repository';
 import * as bcrypt from 'bcrypt';
 import { JwtService } from '@nestjs/jwt';
+import { User } from '@prisma/client';
+import { UsersService } from 'src/users/users.service';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly AuthRepository: AuthRepository,
+    private readonly userService: UsersService,
     private readonly jwtService: JwtService,
   ) {}
 
-  async signUp(user: CreateAuthDto) {
-    const userAlreadyExists = await this.AuthRepository.checksIfUserExists(
-      user,
-    );
-    if (userAlreadyExists) throw new ForbiddenException();
+  private expiresIn = '10 days';
+  private issuer = 'giovanni';
 
-    return await this.AuthRepository.signUpRep(user);
+  async signUp(userDto: CreateAuthDto) {
+    const user = await this.userService.getByEmail(userDto.email);
+    if (user) throw new ConflictException();
+    return this.userService.create(userDto);
   }
 
-  async signIn(user: CreateAuthDto) {
-    const userAlreadyExists = await this.AuthRepository.checksIfUserExists(
-      user,
-    );
+  async signIn(userDto: CreateAuthDto) {
+    const user = await this.userService.getByEmail(userDto.email);
+    if (!user) throw new NotFoundException();
 
-    if (!userAlreadyExists) throw new NotFoundException();
+    const valid = bcrypt.compareSync(userDto.password, user.password);
 
-    const validPassword = await bcrypt.compare(
-      user.password,
-      userAlreadyExists.password,
-    );
-    if (!validPassword) throw new ForbiddenException();
-    return this.createToken(userAlreadyExists);
+    if (!valid) throw new NotAcceptableException();
+
+    return this.createToken(user);
   }
 
-  private createToken(user) {
+  private createToken(user: User): string {
     return this.jwtService.sign(
       {
         email: user.email,
       },
       {
-        expiresIn: '7 days',
+        expiresIn: this.expiresIn,
+        issuer: this.issuer,
+        subject: String(user.id),
       },
     );
+  }
+
+  checkToken(token: string) {
+    try {
+      const data = this.jwtService.verify(token, {
+        issuer: this.issuer,
+      });
+
+      return data;
+    } catch (error) {
+      console.log(error);
+      throw new BadRequestException(error);
+    }
   }
 }
