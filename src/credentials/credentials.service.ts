@@ -1,21 +1,25 @@
 import { Injectable } from '@nestjs/common';
 import { CreateCredentialDto } from './dto/create-credential.dto';
+import { CredentialsRepository } from './credentials.repository';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class CredentialsService {
-  create(user: CreateCredentialDto) {
-    return 'This action adds a new credential';
+  constructor(private readonly credentialRepository: CredentialsRepository) {}
+
+  create(user: User, body: CreateCredentialDto) {
+    return this.credentialRepository.create(user, body);
   }
 
-  findAll() {
-    return `This action returns all credentials`;
+  findAll(user: User) {
+    return this.credentialRepository.findAll(user);
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} credential`;
+  findOne(id: number, user: User) {
+    return this.credentialRepository.findOne(id, user);
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} credential`;
+  remove(id: number, user: User) {
+    return this.credentialRepository.remove(id, user);
   }
 }
